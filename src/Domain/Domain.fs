@@ -1,24 +1,111 @@
 ﻿namespace Play14.Domain
 
+open System
+
+module ConstrainedType =
+
+    /// Create a constrained string using the constructor provided
+    /// Return Error if input is null, empty, or length > maxLen
+    let createString fieldName ctor maxLen str = 
+        if String.IsNullOrEmpty(str) then
+            let msg = sprintf "%s must not be null or empty" fieldName 
+            Error msg
+        elif str.Length > maxLen then
+            let msg = sprintf "%s must not be more than %i chars" fieldName maxLen 
+            Error msg 
+        else
+            Ok (ctor str)
+
+    /// Create a optional constrained string using the constructor provided
+    /// Return None if input is null, empty. 
+    /// Return error if length > maxLen
+    /// Return Some if the input is valid
+    let createStringOption fieldName ctor maxLen str = 
+        if String.IsNullOrEmpty(str) then
+            Ok None
+        elif str.Length > maxLen then
+            let msg = sprintf "%s must not be more than %i chars" fieldName maxLen 
+            Error msg 
+        else
+            Ok (ctor str |> Some)
+
+    /// Create a constrained integer using the constructor provided
+    /// Return Error if input is less than minVal or more than maxVal
+    let createInt fieldName ctor minVal maxVal i = 
+        if i < minVal then
+            let msg = sprintf "%s: Must not be less than %i" fieldName minVal
+            Error msg
+        elif i > maxVal then
+            let msg = sprintf "%s: Must not be greater than %i" fieldName maxVal
+            Error msg
+        else
+            Ok (ctor i)
+
+    /// Create a constrained decimal using the constructor provided
+    /// Return Error if input is less than minVal or more than maxVal
+    let createDecimal fieldName ctor minVal maxVal i = 
+        if i < minVal then
+            let msg = sprintf "%s: Must not be less than %M" fieldName minVal
+            Error msg
+        elif i > maxVal then
+            let msg = sprintf "%s: Must not be greater than %M" fieldName maxVal
+            Error msg
+        else
+            Ok (ctor i)
+
+    /// Create a constrained string using the constructor provided
+    /// Return Error if input is null. empty, or does not match the regex pattern
+    let createLike fieldName  ctor pattern str = 
+        if String.IsNullOrEmpty(str) then
+            let msg = sprintf "%s: Must not be null or empty" fieldName 
+            Error msg
+        elif System.Text.RegularExpressions.Regex.IsMatch(str,pattern) then
+            Ok (ctor str)
+        else
+            let msg = sprintf "%s: '%s' must match the pattern '%s'" fieldName str pattern
+            Error msg 
+
+module Common =
+
+    type String50 = private String50 of string
+    type EmailAddress = private EmailAddress of string
+
+    module String50 =
+
+        let value (String50 str) = str
+
+        let create fieldName str = 
+            ConstrainedType.createString fieldName String50 50 str
+
+        let createOption fieldName str = 
+            ConstrainedType.createStringOption fieldName String50 50 str
+
+    module EmailAddress =
+
+        let value (EmailAddress str) = str
+
+        let create fieldName str = 
+            let pattern = @"\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*"
+            ConstrainedType.createLike fieldName EmailAddress pattern str
+
+
 module Contacts =
 
-    open System
-
-    type Twitter = Twitter of Uri
+    type Twitter = private Twitter of Uri
 
     module Twitter =
         let create ( handle : string) : Twitter =
             let name = handle.Split('/', '@') |> Seq.last
             sprintf "https://twitter.com/%s" name |> Uri |> Twitter
 
-    type Facebook = Facebook of Uri
+    type Facebook = private Facebook of Uri
 
     module Facebook =
         let create ( page : string ) : Facebook =
             let name = page.Split('/', '@') |> Seq.last
             sprintf "http://facebook.com/%s" name |> Uri |> Facebook
 
-    type LinkedIn = LinkedIn of Uri
+    type LinkedIn = private LinkedIn of Uri
 
     module LinkedIn =
         let create ( account : string ) : LinkedIn =
@@ -30,7 +117,7 @@ module Contacts =
     | Facebook of Facebook
     | LinkedIn of LinkedIn
 
-    type EmailAddress = EmailAddress of string
+    type EmailAddress = private EmailAddress of string
 
     module EmailAddress = 
         let create ( email : string ) : EmailAddress =
@@ -60,18 +147,20 @@ module Contacts =
 
 module Sponsors =
 
-    open System
     open Contacts
 
     type SponsorName = SponsorName of string
-    type WebsiteUri = WebsiteUri of Uri
+
+    type WebsiteUri = private WebsiteUri of Uri
     module WebsiteUri = 
         let create (uri : string) : WebsiteUri =
+            // TODO: website uri checks
             uri |> Uri |> WebsiteUri
 
     type LogoUri = LogoUri of Uri
     module LogoUri = 
         let create (uri : string) : LogoUri =
+            // TODO: logo uri checks
             uri |> Uri |> LogoUri
 
     type Sponsor = {
@@ -171,7 +260,7 @@ module Events =
        | Weezevent of WeezeventRegistration
        | Closed
     
-    type UnpubishedEvent = {
+    type Event = {
         Name : EventName
         Schedule : Schedule
         TimeTable : TimeTable
@@ -183,19 +272,9 @@ module Events =
         Sponsors : Sponsor seq
     }
 
-    type PublishedEvent = {
-        Name : EventName
-        Schedule : Schedule
-        TimeTable : TimeTable
-        Status : EventStatus
-        Venue : EventVenue
-        Images : Image seq
-        TeamMembers : Host seq
-        Mentors : Mentor seq
-        Sponsors : Sponsor seq
-        Registration : Registration
-    }
+    type PublishedEvent = PublishedEvent of Event * Registration
 
+    type UnpubishedEvent = UnpubishedEvent of Event
     type CancelledEvent = CancelledEvent of PublishedEvent
     type PostponedEvent = PostponedEvent of PublishedEvent
     type EndedEvent = EndedEvent of PublishedEvent
